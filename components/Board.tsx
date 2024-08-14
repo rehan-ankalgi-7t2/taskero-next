@@ -5,7 +5,7 @@ import { DragDropContext, Droppable, DroppableProps } from 'react-beautiful-dnd'
 import Column from './Column';
 
 const Board = () => {
-    const [board, getBoard, setBoardState] = useBoardStore((state) => [state.board, state.getBoard, state.setBoardState]);
+    const [board, getBoard, setBoardState, updateTodoInDB] = useBoardStore((state) => [state.board, state.getBoard, state.setBoardState, state.updateTodoInDB]);
     useEffect(() => {
         getBoard();
     }, [getBoard]);
@@ -34,10 +34,62 @@ const Board = () => {
             setBoardState({...board, columns: rearrangedColumns})
         }
 
-        // handle todo drop
-        // if(type === "card"){
+        // step needed as indices are stored as numbers in instead of id's in dnd
+        const columns = Array.from(board.columns);
+        const startColIndex = columns[Number(source.droppableId)];
+        const endColIndex = columns[Number(destination.droppableId)];
+
+
+        const startCol: Column = {
+            id: startColIndex[0],
+            todos: startColIndex[1].todos
+        }
+
+        const endCol: Column = {
+            id: endColIndex[0],
+            todos: endColIndex[1].todos
+        }
+
+        if(!startCol || !endCol) return
+
+        // if the card is picked up and drop in the same place... do nothing!
+        if(source.index === destination.index && startCol === endCol) return;
+
+        const newTodos = startCol.todos;
+        const [movedTodo] = newTodos.splice(source.index, 1);
+
+        if(startCol.id === endCol.id){
+            // same column task drag
+            newTodos.splice(destination.index, 0, movedTodo)
+            const newCol = {
+                id: startCol.id,
+                todos: newTodos
+            }
+            const newColumns = new Map(board.columns)
+            newColumns.set(startCol.id, newCol)
+            setBoardState({...board, columns: newColumns})
+        } else {
+            // dragging the task card to a different column
+            const finishTodos = Array.from(endCol.todos);
+            finishTodos.splice(destination.index, 0, movedTodo)
             
-        // }
+            const newColumns = new Map(board.columns)
+            const newCol = {
+                id: startCol.id,
+                todos: newTodos
+            }
+
+            newColumns.set(startCol.id, newCol)
+            newColumns.set(endCol.id, {
+                id: endCol.id,
+                todos: finishTodos
+            })
+
+            // update in DB
+            updateTodoInDB(movedTodo, endCol.id)
+
+            setBoardState({...board, columns: newColumns})
+        }
 
         
     }
